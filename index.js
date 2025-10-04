@@ -6,17 +6,30 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
+
 const port = process.env.PORT || 3000;
 
-const db = new pg.Client({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-});
 
-db.connect();
+const connectionString = process.env.DATABASE_URL;
+const db = connectionString
+  ? new pg.Client({
+      connectionString,
+
+      ssl: { rejectUnauthorized: false },
+    })
+  : new pg.Client({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: Number(process.env.DB_PORT) || 5432,
+      ssl: { rejectUnauthorized: false },
+    });
+
+db.connect().catch((err) => {
+  console.error(" Failed to connect to Postgres:", err);
+  process.exit(1); 
+});
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
@@ -62,7 +75,7 @@ app.post("/add", async (req, res) => {
   try {
     const result = await db.query(
       "SELECT country_code FROM countries WHERE LOWER(country_name) LIKE '%' || $1 || '%';",
-      [input.toLowerCase()]
+      [String(input || "").toLowerCase()]
     );
 
     const data = result.rows[0];
@@ -77,7 +90,7 @@ app.post("/add", async (req, res) => {
 
     res.redirect("/");
   } catch (err) {
-    console.error("Error adding country:", err);
+    console.error("Error adding country:", err.message);
     res.redirect("/");
   }
 });
@@ -103,11 +116,11 @@ app.post("/new", async (req, res) => {
     currentUserId = result.rows[0].id;
     res.redirect("/");
   } catch (err) {
-    console.error("Error creating new user:", err);
+    console.error("Error creating new user:", err.message);
     res.redirect("/");
   }
 });
 
 app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
 });
